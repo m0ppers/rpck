@@ -3,10 +3,15 @@ extern crate rpck;
 use std::fs::{self, OpenOptions, File};
 use std::path::Path;
 use std::error::Error;
+use std::env;
 
 fn main() {
-    let rfilename = "test.txt";
-    let wfilename = "test.txt.rpck";
+    let args: Vec<_> = env::args().collect();
+    if args.len() != 3 {
+        panic!("Must provide exactly 2 parameters. <infile> and <outfile>");
+    }
+    let rfilename = args[1].as_str();
+    let wfilename = args[2].as_str();
     // Create a path to the desired file
     let rpath = Path::new(rfilename);
     let wpath = Path::new(wfilename);
