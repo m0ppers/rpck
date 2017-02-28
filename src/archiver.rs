@@ -1,6 +1,5 @@
 use byteorder::{WriteBytesExt, BigEndian};
-use std::io::{Result, Read};
-
+use std::io::{Result, Read, Write};
 use std::fs::{File};
 
 struct Header {
@@ -48,12 +47,14 @@ fn write_header<T: WriteBytesExt>(length: u64, mut target: T) -> Result<usize> {
     Ok(1)
 }
 
-pub fn archive<T: Read>(rfile: T, size: u64, wfile: File) -> Result<usize> {
+pub fn archive<T: Read>(rfile: T, size: u64, wfile: File) -> Result<()> {
     try!(write_header(size, &wfile));
+    write_data(rfile, &wfile)
+}
 
+fn write_data<'a, TR: Read, TW: 'a>(readable: TR, writeable: &'a TW) -> Result<()> where &'a TW: Write {
     let mut current: Option<Chunk> = None;
-
-    for byte in rfile.bytes() {
+    for byte in readable.bytes() {
         // this is all looking super fuzzy :S n00bish code is n00bish :D
         let b = byte.unwrap();
         current = match current {
@@ -81,7 +82,7 @@ pub fn archive<T: Read>(rfile: T, size: u64, wfile: File) -> Result<usize> {
                                 127 => {
                                     try!(write_chunk(Chunk::Unique {
                                         data: data,
-                                    }, &wfile));
+                                    }, writeable));
                                     Some(Chunk::Unique { data: [b].to_vec()})
                                 },
                                 _ => {
@@ -93,7 +94,7 @@ pub fn archive<T: Read>(rfile: T, size: u64, wfile: File) -> Result<usize> {
                                     if data.len() > 0 {
                                         try!(write_chunk(Chunk::Unique {
                                             data: data,
-                                        }, &wfile));
+                                        }, writeable));
                                     }
                                     Some(Chunk::Repeated {
                                         byte: b,
@@ -118,11 +119,11 @@ pub fn archive<T: Read>(rfile: T, size: u64, wfile: File) -> Result<usize> {
                             if num < 127 {
                                 Some(result)
                             } else {
-                                try!(write_chunk(result, &wfile));
+                                try!(write_chunk(result, writeable));
                                 None
                             }
                         } else {
-                            try!(write_chunk(current, &wfile));
+                            try!(write_chunk(current, writeable));
                             Some(Chunk::Unique { data: [b].to_vec()})
                         }
                     }
@@ -131,7 +132,7 @@ pub fn archive<T: Read>(rfile: T, size: u64, wfile: File) -> Result<usize> {
         }
     }
     if current.is_some() {
-        try!(write_chunk(current.unwrap(), wfile));
+        try!(write_chunk(current.unwrap(), writeable));
     }
-    Ok(1)
+    Ok(())
 }
