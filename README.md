@@ -1,5 +1,7 @@
 # RPck file archiver
 
+[![Build Status](https://travis-ci.org/m0ppers/rpck.svg?branch=master)](https://travis-ci.org/m0ppers/rpck)
+
 WIP implementation of an RPck file archiver.
 
 ## RPck
