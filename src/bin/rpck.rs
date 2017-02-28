@@ -1,13 +1,8 @@
-extern crate byteorder;
+extern crate rpck;
 
 use std::fs::{self, OpenOptions, File};
 use std::path::Path;
 use std::error::Error;
-
-mod archiver;
-
-#[cfg(test)]
-mod test;
 
 fn main() {
     let rfilename = "test.txt";
@@ -43,7 +38,7 @@ fn main() {
         Ok(file) => file,
     };
 
-    match archiver::archive(rfile, metadata.len(), wfile) {
+    match rpck::archive(rfile, metadata.len(), wfile) {
         Err(why) => panic!("couldn't write: {}", why.description()),
         Ok(_) => ()
     }

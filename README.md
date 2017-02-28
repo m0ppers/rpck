@@ -25,4 +25,4 @@ shell of your Amiga. Voila.
 
 ## Tests
 
-none 8]
+Some!

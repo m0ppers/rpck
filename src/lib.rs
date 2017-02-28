@@ -1,3 +1,5 @@
+extern crate byteorder;
+
 use byteorder::{WriteBytesExt, BigEndian};
 use std::io::{Result, Read, Write};
 use std::fs::{File};
@@ -5,7 +7,7 @@ use std::fs::{File};
 struct Header {
     magic: [u8; 4],
     orig_length: u32, // for some reasons the decrucnher asm checks if the first byte is a 0
-                      // maybe it is a real u24?
+                    // maybe it is a real u24?
     unknown: u32, // probably a checksum... again...checking explicitly for 0 in the asm :S
 }
 
@@ -19,7 +21,7 @@ enum Chunk {
     },
 }
 
-fn write_chunk<T: WriteBytesExt>(chunk: Chunk, mut target: T) -> Result<()> {
+fn write_chunk<T: WriteBytesExt>(chunk: Chunk, target: &mut T) -> Result<()> {
     match chunk {
         Chunk::Unique { data } => {
             // argh...negating without the compiler being a dingens
@@ -47,12 +49,12 @@ fn write_header<T: WriteBytesExt>(length: u64, mut target: T) -> Result<usize> {
     Ok(1)
 }
 
-pub fn archive<T: Read>(rfile: T, size: u64, wfile: File) -> Result<()> {
+pub fn archive<T: Read>(rfile: T, size: u64, mut wfile: File) -> Result<()> {
     try!(write_header(size, &wfile));
-    write_data(rfile, &wfile)
+    write_data(rfile, &mut wfile)
 }
 
-fn write_data<'a, TR: Read, TW: 'a>(readable: TR, writeable: &'a TW) -> Result<()> where &'a TW: Write {
+fn write_data<TR: Read, TW: Write>(readable: TR, mut writeable: &mut TW) -> Result<()> {
     let mut current: Option<Chunk> = None;
     for byte in readable.bytes() {
         // this is all looking super fuzzy :S n00bish code is n00bish :D
@@ -82,7 +84,7 @@ fn write_data<'a, TR: Read, TW: 'a>(readable: TR, writeable: &'a TW) -> Result<(
                                 127 => {
                                     try!(write_chunk(Chunk::Unique {
                                         data: data,
-                                    }, writeable));
+                                    }, &mut writeable));
                                     Some(Chunk::Unique { data: [b].to_vec()})
                                 },
                                 _ => {
@@ -94,7 +96,7 @@ fn write_data<'a, TR: Read, TW: 'a>(readable: TR, writeable: &'a TW) -> Result<(
                                     if data.len() > 0 {
                                         try!(write_chunk(Chunk::Unique {
                                             data: data,
-                                        }, writeable));
+                                        }, &mut writeable));
                                     }
                                     Some(Chunk::Repeated {
                                         byte: b,
@@ -119,11 +121,11 @@ fn write_data<'a, TR: Read, TW: 'a>(readable: TR, writeable: &'a TW) -> Result<(
                             if num < 127 {
                                 Some(result)
                             } else {
-                                try!(write_chunk(result, writeable));
+                                try!(write_chunk(result, &mut writeable));
                                 None
                             }
                         } else {
-                            try!(write_chunk(current, writeable));
+                            try!(write_chunk(current, &mut writeable));
                             Some(Chunk::Unique { data: [b].to_vec()})
                         }
                     }
@@ -132,7 +134,10 @@ fn write_data<'a, TR: Read, TW: 'a>(readable: TR, writeable: &'a TW) -> Result<(
         }
     }
     if current.is_some() {
-        try!(write_chunk(current.unwrap(), writeable));
+        try!(write_chunk(current.unwrap(), &mut writeable));
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod test;
