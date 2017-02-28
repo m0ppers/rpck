@@ -17,7 +17,7 @@ enum Chunk {
     },
     Repeated {
         byte: u8,
-        num: u8,
+        num: usize,
     },
 }
 
@@ -31,7 +31,7 @@ fn write_chunk<T: WriteBytesExt>(chunk: Chunk, target: &mut T) -> Result<()> {
             }
         },
         Chunk::Repeated { byte, num } => {
-            try!(target.write_u8(num - 1));
+            try!(target.write_u8(num as u8 - 1));
             try!(target.write_u8(byte));
         }
     }
@@ -62,76 +62,49 @@ fn write_data<TR: Read, TW: Write>(readable: TR, mut writeable: &mut TW) -> Resu
         current = match current {
             None => Some(Chunk::Unique { data: [b].to_vec()}),
             Some(current) => {
-                match current {
-                    // pyramid, pyramid!
+                let (chunk, len) = match current {
                     Chunk::Unique { mut data } => {
-                        if b == *data.last().unwrap() {
-                            // if it is unique (data[0] != data[1]) it must be at least 2 bytes long :S
-                            // (that's what I found out from example files)
-                            match data.len() {
-                                1 => {
-                                    Some(Chunk::Repeated {
-                                        byte: b,
-                                        num: 2,
-                                    })
-                                },
-                                2 => {
-                                    data.push(b);
-                                    Some(Chunk::Unique {
-                                        data: data,
-                                    })
-                                },
-                                127 => {
-                                    try!(write_chunk(Chunk::Unique {
-                                        data: data,
-                                    }, &mut writeable));
-                                    Some(Chunk::Unique { data: [b].to_vec()})
-                                },
-                                _ => {
-                                    let mut num = 1;
-                                    while data.len() != 2 && *data.last().unwrap() == b {
-                                        num += 1;
-                                        data.pop();
-                                    }
-                                    if data.len() > 0 {
-                                        try!(write_chunk(Chunk::Unique {
-                                            data: data,
-                                        }, &mut writeable));
-                                    }
-                                    Some(Chunk::Repeated {
-                                        byte: b,
-                                        num: num,
-                                    })
-                                }
+                        let len = data.len();
+                        if len > 1 && data.ends_with(&[b, b]) {
+                            if len > 2 {
+                                data.split_off(len - 2);
+                                try!(write_chunk(Chunk::Unique {
+                                    data: data,
+                                }, &mut writeable));
                             }
+                            (Chunk::Repeated {
+                                byte: b,
+                                num: 3,
+                            }, 3)
                         } else {
                             data.push(b);
-                            Some(Chunk::Unique {
+                            (Chunk::Unique {
                                 data: data,
-                            })
+                            }, len + 1)
                         }
                     },
                     Chunk::Repeated { byte, mut num } => {
                         if b == byte {
                             num += 1;
-                            let result = Chunk::Repeated {
+                            (Chunk::Repeated {
                                 byte: b,
                                 num: num,
-                            };
-                            if num < 127 {
-                                Some(result)
-                            } else {
-                                try!(write_chunk(result, &mut writeable));
-                                None
-                            }
+                            }, num)
                         } else {
                             try!(write_chunk(current, &mut writeable));
-                            Some(Chunk::Unique { data: [b].to_vec()})
+                            (Chunk::Unique { data: [b].to_vec()}, 1)
                         }
                     }
+                };
+                
+                if len == 128 {
+                    try!(write_chunk(chunk, &mut writeable));
+                    None
+                } else {
+                    Some(chunk)
                 }
             }
-        }
+        };
     }
     if current.is_some() {
         try!(write_chunk(current.unwrap(), &mut writeable));
