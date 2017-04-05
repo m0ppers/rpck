@@ -66,11 +66,15 @@ fn write_data<TR: Read, TW: Write>(readable: TR, mut writeable: &mut TW) -> Resu
         // this is all looking super fuzzy :S n00bish code is n00bish :D
         let b = byte.unwrap();
         current = match current {
+            // in the beginning everything is unique
             None => Some(Chunk::Unique { data: [b].to_vec()}),
             Some(current) => {
                 let (chunk, len) = match current {
                     Chunk::Unique { mut data } => {
                         let len = data.len();
+                        // here we check if we our most recent unique byte is repeating
+                        // and eventually convert it to a repeated structure
+                        // and write the unique bytes captured so far to disk (or whatever writable is)
                         if len > 1 && data.ends_with(&[b, b]) {
                             if len > 2 {
                                 data.split_off(len - 2);
@@ -89,6 +93,8 @@ fn write_data<TR: Read, TW: Write>(readable: TR, mut writeable: &mut TW) -> Resu
                             }, len + 1)
                         }
                     },
+                    // capture until the byte changes...write the repeated chunk and create
+                    // a new unique chunk
                     Chunk::Repeated { byte, mut num } => {
                         if b == byte {
                             num += 1;
@@ -103,6 +109,7 @@ fn write_data<TR: Read, TW: Write>(readable: TR, mut writeable: &mut TW) -> Resu
                     }
                 };
                 
+                // due to the format this is the maximum size a chunk can have
                 if len == 128 {
                     written = written + try!(write_chunk(chunk, &mut writeable));
                     None
